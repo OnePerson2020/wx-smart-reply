@@ -1,0 +1,9 @@
+qt.qpa.fonts: Populating font family aliases took 49 ms. Replace uses of missing font family "Sans Serif" with one that exists to avoid this cost. 
+python 3.14.7 / Darwin 25.4.0
+[PASS] 依赖: PySide6 6.11.2 / pycryptodome / httpx 已就绪
+[PASS] 知识库: 自建演示库可读：3 个会话，自己=wxid_demo_me
+[PASS] 生成引擎: 离线生成 4 条候选
+[PASS] 界面: 弹窗可构建（1 张候选卡）
+[PASS] 真实知识库 <演示库>: 3 个会话 / 4 个联系人 / 自己=wxid_demo_me
+
+全部通过 ✅
