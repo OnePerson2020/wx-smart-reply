@@ -135,6 +135,56 @@ def cmd_refresh(args) -> int:
     return 0
 
 
+def cmd_keycheck(args) -> int:
+    """先验密钥，再谈解密：keys.json 到底能不能开这些库。"""
+    from .kb.crypto import check_keys
+    from .kb.paths import find_account_dirs, find_keys_file
+
+    src = Path(args.src).expanduser() if args.src else None
+    if src is None:
+        dirs = find_account_dirs()
+        if not dirs:
+            print("没找到微信数据目录，用 --src 指定（例如 D:\\wechat\\xwechat_files 或它的 db_storage）",
+                  file=sys.stderr)
+            return 1
+        src = dirs[0]
+        print("自动选中的微信数据目录（按最近使用排序，可用 --src 指定其他）：")
+        for d in dirs[:5]:
+            print(f"  {'→' if d == src else ' '} {d}")
+
+    keys = find_keys_file(args.keys, [Path.cwd(), src, src.parent])
+    if not keys:
+        print("没找到 keys.json；用 --keys 指定（支持 {ׁ'rel': {'enc_key': '<64hex>'}} 和 "
+              "{ׁ'rel': \"x'<64hex><32hex>'\"} 两种格式）", file=sys.stderr)
+        return 1
+
+    print(f"\n微信数据目录：{src}\n密钥文件：　　{keys}\n")
+    statuses = check_keys(src, keys)
+    if not statuses:
+        print("这个目录下没有找到需要解密的库（contact/ session/ message/ 结构对吗？）")
+        return 1
+
+    width = max(len(s.rel) for s in statuses)
+    bad = 0
+    for st in statuses:
+        flag = {"ok": "✅", "ok-structural": "✅", "fail": "❌", "missing": "⚠️"}[st.status]
+        print(f"  {flag} {st.rel:<{width}}  {st.size_mb:6.1f} MB  {st.hint}")
+        bad += st.status in ("fail", "missing")
+
+    print()
+    if not bad:
+        print("密钥全部可用。下一步二选一：")
+        print(f"  A) 用本程序增量解密：python -m wxreply refresh --src \"{src}\" "
+              f"--out \"<解密输出目录>\" --keys \"{keys}\"")
+        print("  B) 直接在界面里选 decrypt 模式，把上面三个路径填进「监控」页")
+    else:
+        print("有库的密钥不可用。常见原因：")
+        print("  1) 密钥是在另一台机器/另一次安装（数据库被重建过）上取的：密钥与库的 salt 绑定，不能跨机复用")
+        print("  2) 微信升级后重生成/重加密了数据库：需要在当前这台机器上重新取一次密钥")
+        print("  3) keys.json 的键名写法不匹配：应写成 contact/contact.db、message/message_0.db 这种相对路径")
+    return 1 if bad else 0
+
+
 def cmd_selftest(args) -> int:
     """一键自检：依赖、知识库、生成引擎、界面——打包后/新机器上先跑这个。"""
     import platform
@@ -284,6 +334,11 @@ def main(argv: list[str] | None = None) -> int:
     st = sub.add_parser("selftest", help="一键自检（依赖 / 知识库 / 生成 / 界面）")
     st.add_argument("--kb", help="顺便检查一个真实（或演示）已解密目录")
     st.set_defaults(func=cmd_selftest)
+
+    kc = sub.add_parser("keycheck", help="校验 keys.json 能否解开这些库（HMAC 强校验，不解密不写盘）")
+    kc.add_argument("--src", help="微信 xwechat_files 目录或账号 db_storage 目录（不给就自动发现）")
+    kc.add_argument("--keys", help="keys.json（不给就自动找）")
+    kc.set_defaults(func=cmd_keycheck)
 
     args = p.parse_args(argv)
     if not getattr(args, "func", None):

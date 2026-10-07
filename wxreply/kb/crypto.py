@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import sqlite3
@@ -59,8 +60,8 @@ def load_keys(path: str | Path) -> dict[str, bytes]:
     """返回 {相对路径(posix): 32 字节 AES key}。
 
     支持：
-      {"message/message_0.db": {"enc_key": "<64hex>"}}      —— wxkey-hook / wxecho
-      {"message/message_0.db": "x'<64hex_key><32hex_salt>'"} —— wechat-msg-mcp
+      {"message/message_0.db": {"enc_key": "<64hex>"}}         —— 只记密钥
+      {"message/message_0.db": "x'<64hex_key><32hex_salt>'"}   —— 密钥 + salt
     """
     raw = json.loads(Path(path).read_text(encoding="utf-8"))
     keys: dict[str, bytes] = {}
@@ -188,6 +189,86 @@ def decrypt_wal(src_wal: str | Path, dst_wal: str | Path, key: bytes) -> bool:
         return False
     dst_wal.write_bytes(bytes(out))
     return True
+
+
+# --------------------------------------------------------------------------- #
+# 密钥校验（拿到 keys.json 后先跑这个，再谈解密）
+# --------------------------------------------------------------------------- #
+def verify_key_hmac(db_path: str | Path, key: bytes) -> bool:
+    """用页 1 的 HMAC-SHA512 强校验密钥对不对（SQLCipher raw-key 模式）：
+
+        mac_key = PBKDF2-HMAC-SHA512(enc_key, salt ^ 0x3a, 2 轮, 32 字节)
+        HMAC-SHA512(mac_key, 页1[16:4032] + 小端页码1) == 页1[4032:4096]
+
+    这是判定密钥有效的决定性证据。测试用的假库没有真 HMAC，会返回 False。
+    """
+    import hmac as _hmac
+    import struct as _struct
+
+    try:
+        with open(db_path, "rb") as f:
+            page = f.read(PAGE_SIZE)
+    except OSError:
+        return False
+    if len(page) < PAGE_SIZE or AES is None:
+        return False
+    salt = page[:SALT_SIZE]
+    mac_key = hashlib.pbkdf2_hmac("sha512", key, bytes(b ^ 0x3A for b in salt), 2, dklen=32)
+    h = _hmac.new(mac_key, page[SALT_SIZE: PAGE_SIZE - RESERVE_SIZE + IV_SIZE], hashlib.sha512)
+    h.update(_struct.pack("<I", 1))
+    return h.digest() == page[PAGE_SIZE - HMAC_SIZE: PAGE_SIZE]
+
+
+@dataclass
+class KeyStatus:
+    rel: str
+    size_mb: float
+    has_key: bool
+    hmac_ok: bool
+    structural_ok: bool
+
+    @property
+    def status(self) -> str:
+        if not self.has_key:
+            return "missing"
+        if self.hmac_ok:
+            return "ok"
+        return "ok-structural" if self.structural_ok else "fail"
+
+    @property
+    def hint(self) -> str:
+        return {
+            "ok": "密钥正确（HMAC 强校验通过）",
+            "ok-structural": "能解出合法页结构，但没有可校验的 HMAC（测试库/非常规库）",
+            "fail": "密钥与这个库不匹配：可能取的是另一台机器/另一批库的密钥，或微信升级后换了密钥",
+            "missing": "keys.json 里没有这个库的条目（检查相对路径写法）",
+        }[self.status]
+
+
+def check_keys(src_root: str | Path, keys_file: str | Path,
+               groups: tuple[str, ...] = DEFAULT_GROUPS) -> list[KeyStatus]:
+    """逐个库校验密钥，返回状态列表（不解密、不写盘）。"""
+    root = _resolve_src_root(Path(src_root).expanduser())
+    keys = load_keys(keys_file) if keys_file and Path(keys_file).exists() else {}
+    out: list[KeyStatus] = []
+    for group in groups:
+        gdir = root / group
+        if not gdir.is_dir():
+            continue
+        for f in sorted(gdir.iterdir()):
+            if not (f.is_file() and f.suffix == ".db" and is_wanted(group, f.name)):
+                continue
+            rel = f"{group}/{f.name}"
+            key = resolve_key(f, keys, rel)
+            size_mb = f.stat().st_size / 1e6
+            if key is None:
+                out.append(KeyStatus(rel, size_mb, False, False, False))
+                continue
+            data = f.read_bytes()
+            first = decrypt_page(data[:PAGE_SIZE], key, 1) if len(data) >= PAGE_SIZE else b""
+            out.append(KeyStatus(rel, size_mb, True, verify_key_hmac(f, key),
+                                 _page_type_ok(first, 1)))
+    return out
 
 
 def _db_ok(path: Path) -> bool:

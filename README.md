@@ -11,6 +11,9 @@ Windows 桌面小工具：**用你本地已解密的微信 4.x 聊天记录当�
 > 不自动发送消息**，只把候选文字写进剪贴板。数据全程留在本机，唯一的外部请求是你在「模型」页自己填的那个接口
 > （不接模型时完全不出网）。请只在符合当地法律与微信服务条款的前提下使用，使用后果自负；作者不提供任何担保。
 
+> 📖 **从一台空白 Windows 到能用**（含取密钥、解密、配模型、选联系人、开监控的每一步与自检）：
+> **[docs/WINDOWS_SETUP_GUIDE.md](docs/WINDOWS_SETUP_GUIDE.md)**
+
 ![弹窗](docs/evidence/popup.png)
 ![主窗口](docs/evidence/main_window.png)
 
@@ -33,6 +36,8 @@ Windows 桌面小工具：**用你本地已解密的微信 4.x 聊天记录当�
 | 模型 | 任意 OpenAI 兼容接口（火山方舟 / OpenAI / DeepSeek / 本地 Ollama…）；也可先用离线模板模式 |
 
 ## 3. 快速开始（Windows）
+
+> 完整版（含最卡的「取密钥」环节）见 **[docs/WINDOWS_SETUP_GUIDE.md](docs/WINDOWS_SETUP_GUIDE.md)**，下面是最短路径。
 
 **部署清单（从零到能用）**
 
@@ -94,12 +99,17 @@ python -m venv .venv
 
 ### 模式二 `decrypt`：程序自己增量解密
 
-填三个路径：
+填三个路径（**先用 `keycheck` 确认密钥可用，再解密**）：
 
-- 微信数据目录：`C:\Users\<你>\Documents\xwechat_files`（或直接指向 `<wxid>_xxxx\db_storage`）
-- keys.json：由你的密钥提取工具产出。两种格式都认：
-  - `{"message/message_0.db": {"enc_key": "64位hex"}}`（wxkey-hook / wxecho 风格）
-  - `{"message/message_0.db": "x'<64位hex key><32位hex salt>'"}`（wechat-msg-mcp 风格）
+```powershell
+python -m wxreply keycheck --src "...\xwechat_files" --keys "keys.json"
+# ✅ 密钥正确（HMAC 强校验通过） / ❌ 密钥与库不匹配（跨机、微信升级重加密、键名写法）
+```
+
+- 微信数据目录：`C:\Users\<你>\Documents\xwechat_files`（或直接指向 `<wxid>_xxxx\db_storage`；程序会自动落到最近账号）
+- keys.json：由你的密钥提取工具产出（本仓库**有意不内置**进程内存取密钥，原因见指引 2.5）。两种格式都认：
+  - `{"message/message_0.db": {"enc_key": "64位hex"}}`（只记密钥）
+  - `{"message/message_0.db": "x'<64位hex key><32位hex salt>'"}`（密钥 + salt）
 - 解密输出目录：随便一个空目录，程序往里镜像可读的 sqlite
 
 程序只按**源文件 (mtime, size) 变化**触发重新解密，实测 73MB 的消息库约 0.1～0.3 秒，
@@ -172,6 +182,7 @@ python -m venv .venv
 ```powershell
 python run.py                                     # 图形界面（等价 python -m wxreply）
 python -m wxreply selftest [--kb DIR]              # 自检（依赖/知识库/生成/界面）
+python -m wxreply keycheck [--src DIR] [--keys F]   # 校验 keys.json 能否解开这些库（HMAC 强校验，不解密）
 python -m wxreply check --kb DIR                   # 知识库统计 + 联系人解析结果
 python -m wxreply once --kb DIR --chat 备注名 [--text "对方的话"] [--refine "意见"]
                                                    # 不开界面跑一次生成 / 验证多轮改写
@@ -200,7 +211,7 @@ wxreply/
     └── popup.py       # 弹窗 + 候选卡片
 tools/make_demo_kb.py  # 生成虚拟演示知识库（测试与自检用，不含任何真实聊天）
 tools/build_windows.ps1, wxreply.spec, start_wxreply.bat
-tests/                 # 62 项测试，含离屏界面联调（真点按钮、真读剪贴板、真跑监控线程）
+tests/                 # 64 项测试，含离屏界面联调（真点按钮、真读剪贴板、真跑监控线程）
 ```
 
 ## 10. 技术事实（已用真实 4.4.x 库逐条验证，写下来免得再踩）
@@ -243,7 +254,7 @@ tests/                 # 62 项测试，含离屏界面联调（真点按钮、�
 ## 13. 开发
 
 ```bash
-python -m pytest -q                       # 62 项
+python -m pytest -q                       # 64 项
 python -m ruff check --select F,E9,B wxreply tools tests run.py
 python -m wxreply selftest                # 打包产物里也可用（冻结后已验证）
 python run.py selftest --kb <已解密目录>   # 顺便体检真实知识库

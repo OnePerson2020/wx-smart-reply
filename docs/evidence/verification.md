@@ -17,6 +17,7 @@
 | 候选展示 + 复制 | 每张卡「复制」按钮 → 剪贴板 | `test_copy_button_puts_text_in_clipboard`（断言剪贴板内容） |
 | 点候选写评论、可多轮 | 卡片内意见框 → `engine.refine`，历史保留 | `test_comment_round_refines_text_and_keeps_history`（两轮，断言 `rounds` 与界面「第1轮/第2轮」标签）；真模型运行见 B |
 | 最终生成 → 剪贴板，用户自己发 | 底部「复制我给对方发的最终回复」 | `test_final_copy_uses_refined_text`（断言剪贴板 == 改写后文本） |
+| 密钥可校验 | `keycheck` 用 HMAC-SHA512 对页 1 做强校验 | `test_check_keys_reports_ok_structural_fail_missing`、`test_keycheck_cli`；真机 3 个库全部 ✅ |
 | 实时捕获微信消息 | `dir`：轮询已解密目录；`decrypt`：按源文件 mtime 增量解密（只解密 contact/session/message_N 三个库，真机 9 个 .db 里精确挑出 3 个）+ WAL 尽力解密 | `test_full_decrypt_and_incremental`（源文件变化 → 只重新解密变化文件）；`test_wal_frames_are_replayed`（**用真实 SQLite 写出的 WAL 帧**，解密后 sqlite 成功重放） |
 
 ## B. 真模型端到端
@@ -52,7 +53,7 @@ Windows 上的 .exe 需要你在 Windows 机器执行 `tools\build_windows.ps1`�
 
 ## D. 测试与静态检查
 
-- `python -m pytest -q` → **62 passed**（含 12 项离屏界面联调）
+- `python -m pytest -q` → **64 passed**（含 12 项离屏界面联调）
 - `python -m ruff check --select F,E9,B,UP006,UP035 wxreply tools tests run.py` → **All checks passed**
 - `python -m wxreply selftest` → 全部通过
 

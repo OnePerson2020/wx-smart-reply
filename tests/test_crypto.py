@@ -205,3 +205,44 @@ def test_src_root_can_be_xwechat_files_root(tmp_path: Path):
     assert _resolve_src_root(whole) == account
     assert _resolve_src_root(account) == account
     assert _resolve_src_root(account.parent) == account
+
+
+def test_check_keys_reports_ok_structural_fail_missing(tmp_path: Path):
+    """keycheck：合成库（HMAC 为占位）应判 ok-structural；错密钥 fail；缺条目 missing。"""
+    from wxreply.kb.crypto import check_keys
+
+    plain, enc, keys_file = _make_encrypted(tmp_path)
+    st = {s.rel: s for s in check_keys(enc, keys_file)}
+    assert set(st) == {"contact/contact.db", "session/session.db", "message/message_0.db"}
+    assert all(s.status == "ok-structural" for s in st.values())      # 合成库没有真 HMAC
+    assert all(s.has_key and s.structural_ok for s in st.values())
+
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"message/message_0.db": {"enc_key": (b"\x11" * 32).hex()}}))
+    st2 = {s.rel: s for s in check_keys(enc, bad)}
+    assert st2["message/message_0.db"].status == "fail"
+    assert st2["contact/contact.db"].status == "missing"
+    assert "不匹配" in st2["message/message_0.db"].hint
+
+
+def test_keycheck_cli(tmp_path: Path):
+    import subprocess
+    import sys
+    from pathlib import Path as P
+
+    plain, enc, keys_file = _make_encrypted(tmp_path)
+    root = P(__file__).resolve().parents[1]
+    r = subprocess.run([sys.executable, "-m", "wxreply", "keycheck",
+                        "--src", str(enc), "--keys", str(keys_file)],
+                       capture_output=True, text=True, cwd=root, timeout=180)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "密钥全部可用" in r.stdout
+    assert "refresh --src" in r.stdout
+
+    bad = tmp_path / "bad2.json"
+    bad.write_text(json.dumps({"contact/contact.db": {"enc_key": (b"\x22" * 32).hex()}}))
+    r2 = subprocess.run([sys.executable, "-m", "wxreply", "keycheck",
+                         "--src", str(enc), "--keys", str(bad)],
+                        capture_output=True, text=True, cwd=root, timeout=180)
+    assert r2.returncode == 1
+    assert "不能跨机复用" in r2.stdout
