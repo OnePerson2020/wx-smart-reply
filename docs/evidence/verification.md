@@ -53,7 +53,7 @@ Windows 上的 .exe 需要你在 Windows 机器执行 `tools\build_windows.ps1`�
 
 ## D. 测试与静态检查
 
-- `python -m pytest -q` → **64 passed**（含 12 项离屏界面联调）
+- `python -m pytest -q` → **68 passed**（含 12 项离屏界面联调）
 - `python -m ruff check --select F,E9,B,UP006,UP035 wxreply tools tests run.py` → **All checks passed**
 - `python -m wxreply selftest` → 全部通过
 

@@ -4,18 +4,35 @@ Windows 桌面小工具：**用你本地已解密的微信 4.x 聊天记录当�
 给出几条语气/倾向不同的候选回复并说明理由；你可以直接复制，也可以对某条候选写意见（"太硬了软一点""顺便问下周末"），
 反复改到满意再复制去微信里发送。
 
-**它不替你发消息**：只生成文字、只写剪贴板，发送永远由你本人动手。
+**它不替你发消息**：候选文本只写进剪贴板，发送永远由你本人动手。
+
+![弹窗](docs/evidence/popup.png)
+![主窗口](docs/evidence/main_window.png)
 
 > **免责声明 / 使用边界**
 > 本工具只读取**你自己**在本机已经解密好的聊天数据，用来给你自己起草回复；它**不注入微信、不修改任何微信数据库、
 > 不自动发送消息**，只把候选文字写进剪贴板。数据全程留在本机，唯一的外部请求是你在「模型」页自己填的那个接口
 > （不接模型时完全不出网）。请只在符合当地法律与微信服务条款的前提下使用，使用后果自负；作者不提供任何担保。
 
-> 📖 **从一台空白 Windows 到能用**（含取密钥、解密、配模型、选联系人、开监控的每一步与自检）：
-> **[docs/WINDOWS_SETUP_GUIDE.md](docs/WINDOWS_SETUP_GUIDE.md)**
+---
 
-![弹窗](docs/evidence/popup.png)
-![主窗口](docs/evidence/main_window.png)
+## 0. 给 Agent：从这里开始
+
+改代码前先跑两个门，**都绿才算完成**：
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q                  # 期望 68 passed
+.\.venv\Scripts\python.exe -m wxreply selftest           # 期望 全部通过 ✅
+```
+
+约定、模块↔测试对应表、只有踩过才知道的坑、各类任务的配方，都在：
+
+| 材料 | 内容 |
+| --- | --- |
+| [`AGENTS.md`](AGENTS.md) | 常驻约定：不变量、改哪个文件跑哪个测试、Qt/打包/密钥相关坑 |
+| [`docs/AGENT_TASKS.md`](docs/AGENT_TASKS.md) | 任务配方（加语气、改提示词、接模型、加数据源、加命令、改弹窗、打包、发布前检查），每个带完成判据 |
+| [`docs/WINDOWS_SETUP_GUIDE.md`](docs/WINDOWS_SETUP_GUIDE.md) | 从空白 Windows 跑通真实数据的完整流程（含取密钥、解密、排障速查） |
+| [`docs/evidence/verification.md`](docs/evidence/verification.md) | 需求↔实现↔证据对照表；涉及 4.4.x 库结构时先读它 |
 
 ---
 
@@ -31,237 +48,144 @@ Windows 桌面小工具：**用你本地已解密的微信 4.x 聊天记录当�
 | 项 | 要求 |
 | --- | --- |
 | 系统 | Windows 10/11（macOS / Linux 也能跑，用于调试） |
-| Python | 3.10+（源码运行方式需要；用打包好的 exe 则不需要） |
+| Python | 3.10+（用打包好的 exe 则不需要） |
 | 微信 | 4.x（4.4.x 实测），需要**已经解密的**数据库作为知识库 |
 | 模型 | 任意 OpenAI 兼容接口（火山方舟 / OpenAI / DeepSeek / 本地 Ollama…）；也可先用离线模板模式 |
 
-## 3. 快速开始（Windows）
+## 3. 安装与运行
 
-> 完整版（含最卡的「取密钥」环节）见 **[docs/WINDOWS_SETUP_GUIDE.md](docs/WINDOWS_SETUP_GUIDE.md)**，下面是最短路径。
-
-**部署清单（从零到能用）**
-
-1. 装 Python 3.10+（python.org 安装包记得勾 *Add python.exe to PATH*）；或直接用打包好的 exe 跳过 2–3 步。
-2. 拿代码：`git clone <仓库地址>`（或下载 zip 解压）。
-3. 建环境：`python -m venv .venv` → `.venv\Scripts\python.exe -m pip install -r requirements.txt`。
-4. 准备数据（二选一，见下一节）：**已解密目录**，或 **keys.json + 微信数据目录**。
-5. 自检：`.venv\Scripts\python.exe -m wxreply selftest`（会自建一份虚拟库，不碰你的真实数据）。
-6. 启动：双击 `start_wxreply.bat`，或 `.venv\Scripts\python.exe -m wxreply`。
-7. 在界面里填三处：**监控**（数据来源与目录）→ **联系人**（联系人 1/2/3/4）→ **模型**（Base URL / API Key / 模型 ID），
-   然后点「保存并应用」。状态栏出现「知识库就绪：N 个会话」就成功了。
-8. 要分发：`powershell -ExecutionPolicy Bypass -File tools\build_windows.ps1`，产物在 `dist\WxReply\`。
-
-> 权限提示：读**已解密目录**不需要管理员权限。只有当你自己做「从微信进程内存取密钥」那一步时才需要，
-> 那是你本地工具的事，本程序不参与。杀软可能对 PyInstaller 产物误报，加白即可；防火墙只在调用远程模型接口时用到。
-
-
-### 方式 A：打包成 exe（推荐分发）
+> 完整版（含最卡的「取密钥」环节、每步自检、排障表）见 **[docs/WINDOWS_SETUP_GUIDE.md](docs/WINDOWS_SETUP_GUIDE.md)**。
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File tools\build_windows.ps1
-```
-
-脚本会：建 `.venv` → 装依赖 → 跑测试 → 生成图标 → 自检 → PyInstaller 打包。
-产物：`dist\WxReply\WxReply.exe`（整个 `dist\WxReply` 文件夹拷给别人即可用）。
-
-### 方式 B：源码运行
-
-```powershell
+git clone https://github.com/OnePerson2020/wx-smart-reply.git
+cd wx-smart-reply
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m wxreply           # 或双击 start_wxreply.bat
+.\.venv\Scripts\python.exe -m wxreply selftest      # 自检（用虚拟库，不碰你的真实数据）
+start_wxreply.bat                                   # 或 .\.venv\Scripts\python.exe -m wxreply
 ```
 
-装完之后建议先自检一遍（会自建一份虚拟聊天库，不需要你的真实数据）：
+打包成分发的 exe（会依次跑测试、生成图标、自检、PyInstaller）：
 
 ```powershell
-.\.venv\Scripts\python.exe -m wxreply selftest
-# 顺便体检你的真实知识库：
-.\.venv\Scripts\python.exe -m wxreply selftest --kb "D:\wechat_decrypted"
+powershell -ExecutionPolicy Bypass -File tools\build_windows.ps1   # 产物 dist\WxReply\WxReply.exe
 ```
 
-## 4. 准备微信数据（两种模式）
+> PyInstaller 不能交叉编译，`.exe` 必须在 Windows 上生成。
 
-打开程序左侧 **监控** 页选择数据来源。
+## 4. 数据来源：两种模式
 
-### 模式一 `dir`：直接读你已经解密好的目录（最省事）
+解密链路是「**拿到密钥 → 解成明文库 → 当只读知识库**」。密钥与库的 salt 绑定，**不能跨机复用**。
 
-目录结构要和微信 4.x 本地库一致（你的解密工具/脚本只要产出这种结构就行）：
-
-```
-<已解密目录>/
-├── contact/contact.db        # contact 表（备注 remark、昵称 nick_name）
-├── session/session.db        # SessionTable
-└── message/message_0.db      # 每个会话一张 Msg_<md5(wxid)> 表，可分散在 message_*.db
-```
-
-填「已解密数据库目录」→ 保存并应用。知识库由你的工具负责刷新，程序每个轮询周期读一次新消息。
-
-### 模式二 `decrypt`：程序自己增量解密
-
-填三个路径（**先用 `keycheck` 确认密钥可用，再解密**）：
-
-```powershell
-python -m wxreply keycheck --src "...\xwechat_files" --keys "keys.json"
-# ✅ 密钥正确（HMAC 强校验通过） / ❌ 密钥与库不匹配（跨机、微信升级重加密、键名写法）
-```
-
-- 微信数据目录：`C:\Users\<你>\Documents\xwechat_files`（或直接指向 `<wxid>_xxxx\db_storage`；程序会自动落到最近账号）
-- keys.json：由你的密钥提取工具产出（本仓库**有意不内置**进程内存取密钥，原因见指引 2.5）。两种格式都认：
-  - `{"message/message_0.db": {"enc_key": "64位hex"}}`（只记密钥）
-  - `{"message/message_0.db": "x'<64位hex key><32位hex salt>'"}`（密钥 + salt）
-- 解密输出目录：随便一个空目录，程序往里镜像可读的 sqlite
-
-程序只按**源文件 (mtime, size) 变化**触发重新解密，实测 73MB 的消息库约 0.1～0.3 秒，
-所以轮询默认 3 秒也不会拖慢机器。`-wal` 会**尽力**一起解密（帧布局不符时自动忽略，绝不把脏页喂给 sqlite）。
-
-> **实时性说明（实测口径）**：解密本身是秒级；消息什么时候能被读到取决于微信把数据落盘/checkpoint 的时机，
-> 通常几秒到几分钟。想更快就把微信窗口切一下（会触发 checkpoint）。
-> 实测 4.4.x 的 `-wal` 里常只剩未提交的预分配残页（`dbsize=0`），此时**主库就是权威来源**。
-
-> **4.4.x 加密格式会变**：如果密钥/格式不匹配，程序会在状态栏报"解密后无法用 sqlite 打开"，
-> 并且**不写出任何错误文件**。这种情况请用你已有的解密工具产出目录，改用 `dir` 模式。
-
-## 5. 配置"联系人 1/2/3/4"
-
-**联系人** 页每一行就是一个被监控对象：
-
-| 列 | 说明 |
-| --- | --- |
-| 启用 | 勾上才监控 |
-| 名称 | 显示用，例如 `联系人 1`、`老板`、`妈妈` |
-| 微信ID/备注 | 填 wxid（`wxid_xxx`）、群 id（`xxx@chatroom`）、备注名或昵称都行，点「从知识库选择…」可以直接挑 |
-| 额外说明 | 写进提示词的角色提示，例如"是我老板，注意分寸""同学，随便聊" |
-| 语气(逗号分隔) | 留空用默认四档（稳妥 / 轻松 / 直球 / 简短）；也可写 `客气, 幽默, 直接` |
-
-点 **测试：这些联系人能读到吗** 会显示每个联系人解析到的身份和最近一条消息时间，一眼看出有没有填错。
-
-首次绑定某个联系人时程序**只记录进度、不倒放历史**（避免一开就被旧消息刷屏）；
-之后只有新出现的消息才弹窗，且默认只提醒 15 分钟内的（`只提醒 N 分钟内的新消息`可改）。
-
-## 6. 接入模型
-
-**模型** 页：
-
-| 提供方 | 说明 |
-| --- | --- |
-| `offline（离线模板，不联网）` | 不调用模型，给固定模板候选。用来先跑通流程 / 无网环境。界面会明确提示"离线模板模式"。 |
-| `openai（OpenAI 兼容接口）` | 任何 `POST {base_url}/chat/completions` 的服务。 |
-
-常用填法（Base URL / 模型 ID）：
-
-| 服务 | Base URL | 模型 ID 示例 |
+| 模式 | 你提供 | 程序做什么 |
 | --- | --- | --- |
-| 火山方舟 | `https://ark.cn-beijing.volces.com/api/v3` | 你的接入点 `ep-xxxx` 或方舟模型 ID |
-| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
-| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
-| 本地 Ollama | `http://127.0.0.1:11434/v1` | `qwen2.5:7b` |
+| `dir` | 你已有的解密目录（含 `contact/ session/ message/`） | 每个轮询周期读一次新消息；刷新由你的工具负责 |
+| `decrypt` | 微信数据目录 + `keys.json` + 输出目录 | 按源文件 (mtime, size) 增量解密（只解 `contact.db`/`session.db`/`message_N.db`），顺手尽力解密 `-wal` |
 
-细节：
-
-- 本地地址（`127.0.0.1` / `localhost`）**不要求** API Key。
-- 若模型不接受 `temperature` 或 `max_tokens` 参数名，客户端会自动降级重试（去掉 temperature / 换成 `max_completion_tokens`）。
-- **带思考过程的模型请把「最大输出 tokens」调大**（默认 2048；调到 3000～4000 更稳），否则思考吃光预算、正文可能为空。
-- 点「测试连接」会真发一条极小的请求。
-
-`最大输出 tokens`、`候选条数`、`历史上下文条数`、`模仿语气样例条数` 都在这一页调。
-
-## 7. 日常使用
-
-1. 托盘常驻。菜单：打开设置 / 立即检查一次 / 暂停监控 / 退出。
-2. 某个被监控联系人发来消息 → 右下角弹窗（位置可换四个角）+ Windows 通知。
-3. 卡片上：**复制**（写剪贴板）、**提意见改写**（输入框里写"太硬了/加一句约时间"，可连续多轮，历史保留）。
-4. 底部 **换一批**：在已有候选之外再要几条不同角度。
-5. 底部 **复制我给对方发的最终回复**：复制当前选中的那条改好后的文本。
-6. **记录** 页保留最近 100 条事件（对方说了什么、给过哪些候选），方便回看。
-
-数据都放在本机：`%APPDATA%\wxreply\config.json`（配置，含 API Key，注意别外发）和 `history.jsonl`（记录）。
-
-## 8. 命令行
+拿到 `keys.json` 后先验密钥再解密（HMAC 强校验，不解密不写盘）：
 
 ```powershell
-python run.py                                     # 图形界面（等价 python -m wxreply）
-python -m wxreply selftest [--kb DIR]              # 自检（依赖/知识库/生成/界面）
-python -m wxreply keycheck [--src DIR] [--keys F]   # 校验 keys.json 能否解开这些库（HMAC 强校验，不解密）
-python -m wxreply check --kb DIR                   # 知识库统计 + 联系人解析结果
-python -m wxreply once --kb DIR --chat 备注名 [--text "对方的话"] [--refine "意见"]
-                                                   # 不开界面跑一次生成 / 验证多轮改写
-python -m wxreply demo --kb DIR --chat 备注名      # 离线模板跑一次
-python -m wxreply refresh --src <xwechat目录> --out <解密输出> [--keys keys.json] [--force] [--no-wal]
+.\.venv\Scripts\python.exe -m wxreply keycheck --src "...\xwechat_files" --keys "keys.json"
+.\.venv\Scripts\python.exe -m wxreply refresh  --src "...\xwechat_files" --out "D:\wxreply_decrypted" --keys "keys.json"
+.\.venv\Scripts\python.exe -m wxreply check    --kb "D:\wxreply_decrypted"
 ```
 
-## 9. 目录结构
+- 程序**有意不内置**进程内存取密钥（边界与合规原因，见指引 2.5）；`keys.json` 支持两种格式，见指引 2.3。
+- 实时性：解密本身秒级；消息多久被读到取决于微信落盘/checkpoint（通常几秒到几分钟）。
+  实测 4.4.x 的 `-wal` 常是未提交残页（`dbsize=0`），此时**主库就是权威来源**。
 
-```
-wxreply/
-├── __main__.py        # CLI 入口（gui/selftest/check/once/demo/refresh）
-├── config.py          # 配置（JSON 落盘）
-├── engine.py          # 候选生成 / 换一批 / 多轮改写 / 记录
-├── prompts.py         # 中文提示词模板
-├── llm.py             # OpenAI 兼容客户端（含参数兼容降级、JSON 兜底解析）
-├── watcher.py         # 轮询新消息 → 事件（可线程跑，也可单次跑）
-├── kb/
-│   ├── crypto.py      # SQLCipher4 解密 + 增量镜像 + WAL 尽力解密
-│   ├── reader.py      # 读解密库：联系人 / 消息 / 方向 / 群发言人
-│   ├── models.py      # Contact / Message
-│   └── paths.py       # 微信目录与 keys.json 发现
-└── ui/
-    ├── app.py         # 装配：托盘 + 监控线程 + 生成线程 + 弹窗（队列回主线程）
-    ├── main_window.py # 联系人 / 模型 / 监控 / 记录 四个页
-    └── popup.py       # 弹窗 + 候选卡片
-tools/make_demo_kb.py  # 生成虚拟演示知识库（测试与自检用，不含任何真实聊天）
-tools/build_windows.ps1, wxreply.spec, start_wxreply.bat
-tests/                 # 64 项测试，含离屏界面联调（真点按钮、真读剪贴板、真跑监控线程）
-```
+## 5. 界面里的三处配置
 
-## 10. 技术事实（已用真实 4.4.x 库逐条验证，写下来免得再踩）
+1. **模型**：提供方（`offline` 离线模板 / `openai` 兼容接口）、Base URL、API Key、模型 ID、最大输出 tokens
+   （带思考的模型调到 3000–4000）、候选条数。本地地址免 Key，点「测试连接」真发一条极小请求。
+2. **联系人**：点「从知识库选择…」挑 wxid/备注；起名（`联系人 1`/`老板`/`妈妈`）；写「额外说明」（会进提示词）；
+   可自定义语气；点「测试：这些联系人能读到吗」确认解析到的身份与最近消息时间。
+3. **监控**：数据来源与目录、轮询间隔、只提醒 N 分钟内的新消息、弹窗位置、「立即检查一次」。
+   状态栏出现 `知识库就绪：N 个会话 | 监控：运行中` 即生效。
 
-1. 会话表名 `Msg_<md5(username)>`；表分散在 `message_0..N.db`（`Name2Id` 可反查）。
+首次绑定某联系人时**只记录进度、不倒放历史**（勾「启动时为历史消息也弹窗」可改成倒放）。
+
+## 6. 日常交互
+
+收到消息 → 右下角弹窗 + 系统通知 → 卡片上有语气、踩雷风险、理由：
+
+- **复制**：这一条进剪贴板，去微信粘贴发送；
+- **提意见改写**：写"太硬了""加一句约时间"，可连续多轮，历史意见留在卡上；
+- **换一批**：再要几条不同角度；
+- **复制我给对方发的最终回复**：带走当前这版。
+
+托盘菜单：打开设置 / 立即检查一次 / 暂停监控 / 退出。**记录** 页可回看最近 100 条事件。
+配置与记录在本机：Windows `%APPDATA%\wxreply\`，macOS `~/.wxreply/`。
+
+## 7. 命令行
+
+最常用的四条：
+
+| 命令 | 用途 | 完成判据 |
+| --- | --- | --- |
+| `python -m wxreply` | 打开图形界面 | 主窗口出现，状态栏显示知识库与会话数 |
+| `python -m wxreply selftest [--kb DIR]` | 体检（依赖/知识库/生成/界面） | 输出 `全部通过 ✅` |
+| `python -m wxreply keycheck --src ... --keys ...` | 校验 keys.json | 每个库 `✅ 密钥正确（HMAC 强校验通过）` |
+| `python -m wxreply once --kb DIR --chat 备注名 [--text ...] [--refine ...]` | 不开界面跑一次生成/改写 | 打印意图 + 多条候选（含理由），改写后文本确实变了 |
+
+其余子命令（`check` / `demo` / `refresh` / `gui`）用 `python -m wxreply --help` 查看——**别在这里抄清单，会过时**。
+
+## 8. 模块地图
+
+| 路径 | 职责 |
+| --- | --- |
+| `wxreply/__main__.py` | CLI 子命令：gui / selftest / keycheck / check / once / demo / refresh |
+| `wxreply/config.py` | 配置（JSON 落盘）、默认语气、联系人绑定 |
+| `wxreply/engine.py` | 候选生成 / 换一批 / 多轮改写 / 事件记录 |
+| `wxreply/prompts.py` | 中文提示词唯一真源 |
+| `wxreply/llm.py` | OpenAI 兼容客户端（参数兼容降级、JSON 兜底解析） |
+| `wxreply/watcher.py` | 轮询知识库 → 新消息事件；运行时装配 |
+| `wxreply/kb/crypto.py` | SQLCipher4 解密、增量镜像、密钥 HMAC 校验、WAL 尽力解密 |
+| `wxreply/kb/reader.py` | 读解密库：联系人 / 消息 / 方向 / 群发言人 |
+| `wxreply/ui/app.py` | 装配：托盘 + 监控线程 + 生成线程 + 弹窗（队列回主线程） |
+| `wxreply/ui/popup.py` | 弹窗与候选卡片（复制 / 提意见 / 换一批） |
+| `wxreply/ui/main_window.py` | 联系人 / 模型 / 监控 / 记录 四个页 |
+| `tools/make_demo_kb.py` | 生成虚拟演示知识库（测试、自检、截图都用它，**不含真实聊天**） |
+| `tools/preflight.py` | 发布前扫描：本机路径 / 真实 wxid / 密钥 / 数据库文件 / 虚拟环境 |
+| `tools/make_icon.py` · `wxreply.spec` · `tools/build_windows.ps1` | 图标与 Windows 打包 |
+| `tests/` | 68 项，含离屏界面联调（真点按钮、真读剪贴板、真跑监控线程）；文件↔模块对应见 `AGENTS.md` |
+
+## 9. 已验证的技术事实（微信 4.4.x，写下来免得后人重踩）
+
+1. 会话表名 `Msg_<md5(username)>`，表分散在 `message_0..N.db`（`Name2Id` 可反查）。
 2. **`real_sender_id` 是该消息库 `Name2Id` 表的 rowid**，不是 `contact.id`。
-   自己的 rowid 用 `Name2Id.user_name == 自己的 wxid` 定位（账号目录名 `wxid_xxx_<hash>` 可推出自己的 wxid）。
-   方向判断 `is_from_me = (real_sender_id == 自己的 rowid)`；群消息正文另有 `wxid_xxx:\n` 前缀区分发言人。
-3. 库是 SQLCipher 4：页 4096，保留区 80 = IV(16)+HMAC(64)，AES-256-CBC，raw-key；
-   页 1 = `salt(16) + enc(4000) + iv + hmac`，页 N = `enc(4016) + iv + hmac`，解密后保留区补 0；
-   解密库页头第 21 字节为 80（reserve）。
-4. `-wal` 的页布局与主库一致（页 1 同 `salt+enc(4000)` 形态），可直接套用同一解密函数；
-   但实测微信常留下未提交残页（`dbsize=0`），别指望它一定带来更快的消息。
+   自己的 rowid 用 `Name2Id.user_name == 自己的 wxid` 定位（账号目录名 `wxid_xxx_<hash>` 可推出自己的 wxid）；
+   方向判断 `is_from_me = (real_sender_id == 自己的 rowid)`。
+3. 群消息正文形如 `wxid_xxx:\n内容`（自己发的没有前缀），前缀就是发言人。
+4. 库是 SQLCipher 4：页 4096、保留区 80 = IV(16)+HMAC(64)、AES-256-CBC、raw-key；
+   页 1 = `salt(16) + enc(4000) + iv + hmac`，页 N = `enc(4016) + iv + hmac`；解密库页头第 21 字节为 80（reserve）。
+5. `-wal` 帧与普通页同构（页 1 同 `salt+enc(4000)` 形态），可套用同一解密函数；但真实库多数帧 `dbsize=0`（未提交），别指望它更快。
 
-## 11. 已知边界（有意不做）
+逐条证据（含真机实测与测试名）见 [`docs/evidence/verification.md`](docs/evidence/verification.md)。
 
-- **不自动发送、不操作微信窗口**：没有注入、没有 RPA、不点坐标。只做候选 + 剪贴板。
-- 只理解**文本**消息；图片/语音/视频/文件只当占位（`[图片]` 等），不解析内容。
-- 群消息按发言人（`wxid` 前缀）区分，不处理 @ 列表、不区分群昵称和备注。
-- 不做历史消息检索问答（知识库只用于"最近上下文 + 语气样例"）。
-- 不修改任何微信数据库：`dir` 模式只读；`decrypt` 模式只往你自己的输出目录写。
+## 10. 边界（有意不做）
 
-## 12. 常见问题
+- **不自动发送、不操作微信窗口**：没有注入、没有 RPA、不点坐标；只做候选 + 剪贴板。
+- 只理解**文本**消息；图片/语音/视频/文件当占位（`[图片]` 等），不解析内容。
+- 群消息按发言人区分，不处理 @ 列表、不区分群昵称与备注。
+- 不做历史检索问答（知识库只用于"最近上下文 + 语气样例"）。
+- 不修改任何微信数据库：`dir` 只读；`decrypt` 只往你指定的输出目录写。
 
-**弹窗不出现？**
-① 监控页确认"开启实时监控"已勾选、状态栏显示"监控：运行中"。② 点「立即检查一次」看提示。
-③ 用 `check --kb <目录>` 确认联系人能解析到、且最近消息时间在动。
-④ 数据源不是"新"的：程序只提醒新出现的消息，默认还得在 15 分钟内。
+## 11. 排障
 
-**联系人解析不到？**
-填备注名/昵称最稳（点「从知识库选择…」）。同名多人时会取最匹配的一个。
+完整表格（密钥不匹配、`refresh` 报错、0 个会话、弹窗不出现、延迟、正文为空、杀软误报、托盘图标…）在
+**[docs/WINDOWS_SETUP_GUIDE.md → 排障速查](docs/WINDOWS_SETUP_GUIDE.md#排障速查)**。
 
-**只想安静一会儿？**
-托盘 → 暂停监控；或在监控页取消"开启实时监控"。
+一句话：**消息延迟几分钟是微信落盘频率，不是程序问题**；其余先跑 `keycheck` 和「立即检查一次」，再看状态栏报什么。
 
-**隐私？**
-所有数据都在本机处理。唯一的外部请求是你在「模型」页配置的那个接口；聊天内容会作为上下文发给它
-（所以要清楚自己用的是哪个模型服务）。不接模型（offline）时完全不出网。
+## 12. 开发
 
-## 13. 开发
-
-```bash
-python -m pytest -q                       # 64 项
-python -m ruff check --select F,E9,B wxreply tools tests run.py
-python -m wxreply selftest                # 打包产物里也可用（冻结后已验证）
-python run.py selftest --kb <已解密目录>   # 顺便体检真实知识库
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q                                                   # 68 项
+.\.venv\Scripts\python.exe -m ruff check --select F,E9,B,UP006,UP035 wxreply tools tests run.py
+.\.venv\Scripts\python.exe -m wxreply selftest
+.\.venv\Scripts\python.exe -m wxreply selftest --kb "<已解密目录>"                          # 顺便体检真实知识库
 ```
 
-逐条需求 → 证据的对照表见 `docs/evidence/verification.md`。
-
-测试覆盖：解密往返（含真实 SQLite 写出的 WAL 重放）、仅 `dir`/`decrypt` 两种数据源、
-方向与群发言人识别、监控游标与去重、JSON 容错与多轮改写、参数兼容降级、
-以及**离屏界面联调**（真点"复制/提意见/换一批/最终复制"，断言剪贴板内容与改写历史）。
+测试覆盖：解密往返（含真实 SQLite 写出的 WAL 重放）、两种数据源、密钥 HMAC 校验、方向与群发言人识别、
+监控游标与去重、JSON 容错与多轮改写、参数兼容降级，以及**离屏界面联调**（真点复制/提意见/换一批/最终复制并断言剪贴板）。
