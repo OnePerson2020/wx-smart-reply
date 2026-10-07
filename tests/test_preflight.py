@@ -32,7 +32,6 @@ def _leak_cases() -> dict[str, str]:
         "leak_literal.txt": f"{JOIN(['x', chr(39)])}{'ab12' * 24}{chr(39)}\n",
         "leak_token.py": f'apikey": "{JOIN(["sk-live-", "abcdefghijklmnopqrstuvwxyz012345"])}"\n',
         "leak_pem.md": f"-----BEGIN {JOIN(['RSA ', 'PRIVATE KEY'])}-----\n",
-        "leak_internal.md": f"control plane: {JOIN(['ark_', 'controlplane'])} / {JOIN(['node', '_acls'])}\n",
         "leak.db": "SQLite format 3\x00",
         "keys.json": "{}",
         "history.jsonl": '{"kind":"generate"}\n',
@@ -62,6 +61,32 @@ def test_placeholders_are_allowed(tmp_path: Path):
         "python -m wxreply --config ~/.wxreply/config.json\n",
         encoding="utf-8")
     assert scan(tmp_path) == []
+
+
+def test_extra_local_rules_are_loaded(tmp_path: Path):
+    """团队私有标识不写死在脚本里：本地规则文件/环境变量要真的生效。"""
+    import json
+    import os
+
+    from preflight import EXTRA_ENV_VAR, load_extra_rules, main, scan
+
+    keyword = JOIN(["example", "-corp"])
+    (tmp_path / ".preflight-extra.json").write_text(json.dumps(
+        {"rules": [{"name": "company-domain", "pattern": keyword, "note": "公司域名"}]}), encoding="utf-8")
+    (tmp_path / "doc.md").write_text(f"see {keyword} for details\n", encoding="utf-8")
+
+    assert scan(tmp_path) == []                                   # 默认规则不管它
+    hits = scan(tmp_path, load_extra_rules(tmp_path))
+    assert [f.rule for f in hits] == ["company-domain"]
+    assert hits[0].path == "doc.md", "只应该命中数据文件，规则文件自身必须跳过"
+    assert main(["--path", str(tmp_path)]) == 1                   # 带本地规则就红
+
+    os.environ[EXTRA_ENV_VAR] = f"env-rule={keyword}"
+    try:
+        assert [f.rule for f in scan(tmp_path, load_extra_rules(tmp_path))] == \
+            ["company-domain", "env-rule"]
+    finally:
+        os.environ.pop(EXTRA_ENV_VAR, None)
 
 
 def test_binary_and_cache_dirs_are_skipped(tmp_path: Path):

@@ -21,7 +21,7 @@ Windows 桌面小工具：**用你本地已解密的微信 4.x 聊天记录当�
 改代码前先跑两个门，**都绿才算完成**：
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q                  # 期望 68 passed
+.\.venv\Scripts\python.exe -m pytest -q                  # 期望 69 passed
 .\.venv\Scripts\python.exe -m wxreply selftest           # 期望 全部通过 ✅
 ```
 
@@ -146,9 +146,9 @@ powershell -ExecutionPolicy Bypass -File tools\build_windows.ps1   # 产物 dist
 | `wxreply/ui/popup.py` | 弹窗与候选卡片（复制 / 提意见 / 换一批） |
 | `wxreply/ui/main_window.py` | 联系人 / 模型 / 监控 / 记录 四个页 |
 | `tools/make_demo_kb.py` | 生成虚拟演示知识库（测试、自检、截图都用它，**不含真实聊天**） |
-| `tools/preflight.py` | 发布前扫描：本机路径 / 真实 wxid / 密钥 / 数据库文件 / 虚拟环境 |
+| `tools/preflight.py` | 发布前扫描：本机路径 / 真实 wxid / 密钥 / 数据库文件 / 虚拟环境（团队私有模式走 `.preflight-extra.json`，见示例文件） |
 | `tools/make_icon.py` · `wxreply.spec` · `tools/build_windows.ps1` | 图标与 Windows 打包 |
-| `tests/` | 68 项，含离屏界面联调（真点按钮、真读剪贴板、真跑监控线程）；文件↔模块对应见 `AGENTS.md` |
+| `tests/` | 69 项，含离屏界面联调（真点按钮、真读剪贴板、真跑监控线程）；文件↔模块对应见 `AGENTS.md` |
 
 ## 9. 已验证的技术事实（微信 4.4.x，写下来免得后人重踩）
 
@@ -181,7 +181,7 @@ powershell -ExecutionPolicy Bypass -File tools\build_windows.ps1   # 产物 dist
 ## 12. 开发
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q                                                   # 68 项
+.\.venv\Scripts\python.exe -m pytest -q                                                   # 69 项
 .\.venv\Scripts\python.exe -m ruff check --select F,E9,B,UP006,UP035 wxreply tools tests run.py
 .\.venv\Scripts\python.exe -m wxreply selftest
 .\.venv\Scripts\python.exe -m wxreply selftest --kb "<已解密目录>"                          # 顺便体检真实知识库

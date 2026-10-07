@@ -172,6 +172,10 @@ git status --short
 
 > 扫描用 `tools/preflight.py` 而不是临时 grep：`git grep` 默认**不扫未跟踪文件**，新写的文件会漏检；
 > 规则写在文档里还会自我命中。这个脚本扫工作区（含未跟踪），跳过 `.git`/`.venv`/缓存/二进制。
+>
+> 公司域名、内网标识这类**团队私有**规则不要写进脚本（脚本是公开文件，写进去等于泄露）。
+> 复制 `.preflight-extra.example.json` 成 `.preflight-extra.json`（已 gitignore）填自己的模式，
+> 或用环境变量 `PREFLIGHT_EXTRA_RULES='名字=正则;名字2=正则2'`。
 
 **完成判据**：四条命令全部退出码 0（`preflight.py` 打印 `PASS`）；`git status` 里没有 `keys.json`、解密目录、`history.jsonl`、`.venv/`。
 新增规则时，往 `tools/preflight.py` 的 `RULES` 里加一条，并在 `tests/test_preflight.py::_leak_cases` 补一个样例——测试会验证「这条规则真的抓得到」。

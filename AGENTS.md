@@ -13,7 +13,7 @@ Windows 桌面应用（Python + PySide6）：读**本机已解密的微信 4.x �
 ## 两个门（改完必须跑，缺一不可）
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest -q                                    # 期望：68 passed
+.\.venv\Scripts\python.exe -m pytest -q                                    # 期望：69 passed
 .\.venv\Scripts\python.exe -m wxreply selftest                             # 期望：全部通过 ✅
 ```
 

@@ -1,0 +1,7 @@
+{
+  "_说明": "复制成 .preflight-extra.json（已被 .gitignore 忽略），把自己的公司/内网标识写进来；preflight.py 会自动加载。",
+  "rules": [
+    { "name": "company-domain", "pattern": "example-corp\\.com|内网关键词", "note": "公司域名/内网标识" },
+    { "name": "internal-project", "pattern": "my-internal-project-name", "note": "内部项目名" }
+  ]
+}

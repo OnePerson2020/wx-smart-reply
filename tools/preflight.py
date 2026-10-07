@@ -16,7 +16,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SKIP_DIRS = {".git", ".venv", "__pycache__", ".pytest_cache", ".ruff_cache", "build", "dist", "node_modules"}
-SKIP_FILES = {"preflight.py"}
+# 这两个文件本身就装着规则/模式文本，必须跳过，否则自我命中
+SKIP_FILES = {"preflight.py", ".preflight-extra.json", ".preflight-extra.example.json"}
 TEXT_EXTS = {".py", ".md", ".txt", ".json", ".toml", ".cfg", ".ini", ".yml", ".yaml", ".ps1", ".bat",
              ".spec", ".html", ".css", ".js", ".sh", ".log"}
 
@@ -29,9 +30,12 @@ RULES: list[tuple[str, str, str]] = [
     ("sqlcipher-keyliteral", r"x'[0-9a-fA-F]{96,}'", "疑似真实 keys.json 条目"),
     ("bearer-secret", r"(?:api[_-]?key|apikey|token)\"\s*:\s*\"[A-Za-z0-9_\-]{24,}", "疑似真实 API Key/Token"),
     ("private-key", r"-----BEGIN [A-Z ]*PRIVATE KEY-----", "私钥"),
-    ("internal-marker", r"ark_controlplane|node_acls|bytedance\.com|larkoffice\.com",
-     "内网/公司内部标识（发到公开仓库前去掉）"),
 ]
+
+# 公司/内网标识这类规则因团队而异，不写死在这里（否则本文件自己就泄露了这些词）：
+# 放在仓库外的本地规则文件，或环境变量里，见 load_extra_rules()。
+EXTRA_RULES_FILE = ".preflight-extra.json"
+EXTRA_ENV_VAR = "PREFLIGHT_EXTRA_RULES"
 
 FORBIDDEN_FILES = {
     "keys.json": "密钥文件（应放在仓库外的用户目录）",
@@ -62,10 +66,35 @@ def _iter_files(root: Path):
         yield p
 
 
-def scan(root: str | Path) -> list[Finding]:
+def load_extra_rules(root: str | Path) -> list[tuple[str, str, str]]:
+    """本地私有规则：{root}/.preflight-extra.json（已 gitignore）或环境变量。
+
+    文件格式：{"rules": [{"name": "...", "pattern": "正则", "note": "说明"}]}
+    环境变量格式：PREFLIGHT_EXTRA_RULES='名字=正则;名字2=正则2'
+    """
+    import json
+    import os
+
+    rules: list[tuple[str, str, str]] = []
+    path = Path(root) / EXTRA_RULES_FILE
+    if path.exists():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            for item in data.get("rules", []):
+                rules.append((item["name"], item["pattern"], item.get("note", "本地私有规则")))
+        except Exception as e:                                   # noqa: BLE001
+            print(f"[warn] {EXTRA_RULES_FILE} 解析失败，已忽略：{e}")
+    for chunk in (os.environ.get(EXTRA_ENV_VAR) or "").split(";"):
+        if "=" in chunk:
+            name, pattern = chunk.split("=", 1)
+            rules.append((name.strip() or "extra", pattern.strip(), "环境变量私有规则"))
+    return rules
+
+
+def scan(root: str | Path, extra_rules: list[tuple[str, str, str]] | None = None) -> list[Finding]:
     root = Path(root)
     findings: list[Finding] = []
-    compiled = [(name, re.compile(pattern), note) for name, pattern, note in RULES]
+    compiled = [(name, re.compile(pattern), note) for name, pattern, note in RULES + list(extra_rules or [])]
 
     for p in _iter_files(root):
         rel = str(p.relative_to(root)) if p != root else p.name
@@ -97,7 +126,8 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     root = Path(args.path).expanduser().resolve()
-    findings = scan(root)
+    extra = load_extra_rules(root)
+    findings = scan(root, extra)
     if findings:
         print(f"FAIL：{len(findings)} 处需要处理（{root}）\n")
         for f in findings:
@@ -105,7 +135,8 @@ def main(argv: list[str] | None = None) -> int:
         print("\n处理：真实数据/密钥只放在用户目录（如 %APPDATA%\\wxreply 或仓库外的解密目录）；"
               "文档里用 <你>、wxid_xxx、wxid_demo_* 这类占位符。")
         return 1
-    print(f"PASS：{root} 没有本机路径 / 真实 wxid / 密钥 / 数据库文件 / 虚拟环境")
+    tail = f"（含 {len(extra)} 条本地私有规则）" if extra else ""
+    print(f"PASS：{root} 没有本机路径 / 真实 wxid / 密钥 / 数据库文件 / 虚拟环境{tail}")
     return 0
 
 

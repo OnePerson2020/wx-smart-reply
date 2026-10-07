@@ -53,9 +53,10 @@ Windows 上的 .exe 需要你在 Windows 机器执行 `tools\build_windows.ps1`�
 
 ## D. 测试与静态检查
 
-- `python -m pytest -q` → **68 passed**（含 12 项离屏界面联调）
+- `python -m pytest -q` → **69 passed**（含 12 项离屏界面联调）
 - `python -m ruff check --select F,E9,B,UP006,UP035 wxreply tools tests run.py` → **All checks passed**
 - `python -m wxreply selftest` → 全部通过
+- `python tools/preflight.py` → `PASS`（本机路径 / 真实 wxid / 密钥 / 数据库文件 / 虚拟环境扫描，含反向自测）
 
 ## E. 真实数据上验证过的库结构（写进 README 第 10 节，避免后人重踩）
 
